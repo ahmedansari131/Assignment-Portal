@@ -1,15 +1,13 @@
 from django.urls import path
 from . import views
-from django.conf import settings
-from django.conf.urls.static import static
+
 
 urlpatterns = [
-    path("getuser/", views.getUser, name="user_details"),
-    path("create-assignment/", views.createAssignment, name="create_assignment"),
-    path("assignment/link/", views.assignment_link_view, name="assignment_link"),
-    path("assignment/", views.get_assignments, name="get_assignment"),
-    path("upload/", views.file_upload, name="file_upload"),
-    path("plagiarism/", views.plagiarism, name="plagiarism"),
+    path("register/", views.register, name="register"),
+    path("login/", views.login, name="login"),
+    path("verify-login/", views.verify_login, name="verify_login"),
+    path("verify-email/", views.verify_email, name="verify_email"),
+    path("verify-teacher/<int:id>/", views.verify_user_as_teacher, name="verify_teacher"),
+    path("verify-teacher-email/", views.verify_teacher_email, name="verify_teacher_email"),
+    path("get-user/", views.get_user, name="get_user"),
 ]
-
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,169 +1,319 @@
-from django.utils import timezone
+import os
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from .serializers import *
 from .models import *
-from django.core.files.storage import default_storage
-import os
-from django.utils.text import slugify
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import PyPDF2
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework import status
+from authentication.utils import (
+    check_email_domain,
+    set_tokens_in_cookie,
+    BaseEmail,
+    generate_mail_template,
+)
+from django.contrib.auth.backends import BaseBackend
+from rest_framework_simplejwt.views import TokenViewBase
+from constants import Constant
+
+
+class TokenObtainPairWithoutPasswordView(TokenViewBase):
+    serializer_class = TokenObtainPairWithoutPasswordSerializer
+
+
+class AuthenticationWithoutPassword(BaseBackend):
+    def authenticate(self, request, email=None):
+        try:
+            return User.objects.get(email=email)
+        except User.DoesNotExist:
+            return None
+
+    def get_user(self, user_id):
+        try:
+            return User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return None
+
+
+def get_tokens_for_user(user, role, email):
+    refresh = RefreshToken.for_user(user)
+    refresh["role"] = role
+
+    access_token = refresh.access_token
+    access_token.payload["role"] = role
+    access_token.payload["email"] = email
+
+    return {
+        "refresh": str(refresh),
+        "access": str(access_token),
+    }
 
 
 @api_view(["POST"])
-def getUser(request):
-    user = None
-    data = request.data
-    email = data.get("email")
-    print("DATA:", data, email)
-    try:
-        user = User.objects.get(email=email)
-    except Exception as error:
-        print("Error occured while getting the user", error)
-    print("Email:", user)
-    if user:
-        return Response({"message": "User already exist", "userId": user.id})
-    serializer = UserSerializer(data=data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"data": serializer.data})
+def register(request):
+    serializer = UserLoginSerializer(data=request.data)
+    if serializer.is_valid(raise_exception=True):
+        email = serializer.validated_data.get("email")
+        role = serializer.validated_data.get("role")
+
+        if check_email_domain(email):
+            try:
+                user_query = User.objects.filter(email=email)
+
+                if user_query.exists():
+                    return Response({"message": Constant.USER_EXIST.value})
+
+                user_save_response = serializer.save()
+
+                if user_save_response:
+                    user_id = str(user_save_response.id)
+                    otp = OTP.generate_otp(user=user_save_response)
+                    verification_email = BaseEmail(
+                        recepient=email,
+                        subject="Email Verification | Assignment Portal",
+                        body=generate_mail_template(
+                            mail_type=Constant.VERIFY_EMAIL, otp=otp.otp_code
+                        ),
+                    )
+                    email_response = verification_email.send_email()
+                    if email_response and serializer.is_valid(raise_exception=True):
+                        return Response(
+                            {"message": Constant.OTP_SENT.value, "user_id": user_id}
+                        )
+
+            except Exception as error:
+                return Response({"message": f"Error occurred {error}"})
+        else:
+            return Response({"message": "Enter the Vidyalankar's Email Id"})
+
+
+@api_view(["POST"])
+def login(request):
+    serializer = UserLoginSerializer(data=request.data)
+    if serializer.is_valid(raise_exception=True):
+        email = serializer.validated_data.get("email")
+        role = serializer.validated_data.get("role")
+        if check_email_domain(email):
+            user_query = User.objects.filter(email=email)
+            if user_query.exists():
+                user = User.objects.get(email=email)
+                if user.role.lower() == role.lower():
+                    user_id = str(user.id)
+                    email_sent_response = send_login_email(user)
+                    if email_sent_response:
+                        return Response(
+                            {
+                                "message": Constant.VERIFY_EMAIL.value,
+                                "user_id": user_id,
+                                "role": user.role,
+                            }
+                        )
+                else:
+                    return Response({"message": Constant.USER_DOES_NOT_EXIST.value})
+            else:
+                if serializer.is_valid(raise_exception=True):
+                    user = serializer.save()
+                    user_id = str(user.id)
+                    email_sent_response = send_login_email(user)
+                    if email_sent_response:
+                        return Response(
+                            {
+                                "message": Constant.VERIFY_EMAIL.value,
+                                "user_id": user_id,
+                                "role": str(user.role),
+                                "is_registering": True,
+                            }
+                        )
+
+                    return Response({"message": Constant.USER_DOES_NOT_EXIST.value})
+        else:
+            return Response({"message": "Enter Vidyalankar's Email Id"})
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+def send_login_email(user):
+    otp = OTP.generate_otp(user)
+    user_verification = BaseEmail(
+        subject="OTP for Login to Assignment Portal",
+        recepient=user.email,
+        body=generate_mail_template(mail_type=Constant.IS_STUDENT, otp=otp.otp_code),
+        mail_type=Constant.IS_STUDENT,
+    )
+    user_verification_response = user_verification.send_email()
+    if user_verification_response:
+        return True
     else:
-        return Response({"Error": serializer.errors})
+        return False
 
 
 @api_view(["POST"])
-def createAssignment(request):
-    data = request.data
-    serializer = AssignmentSerializer(data=data)
+def verify_email(request):
+    user_id = request.data.get("user_id")
+    otp_code = request.data.get("otp")
 
-    if serializer.is_valid():
-        serializer.save()
-        data = serializer.data
-        assignment_id = data["id"]
-        data["link"] = f"http://127.0.0.1:8000/api/v1/assignment/link/{assignment_id}/"
-        print(data)
-        return Response({"message": "Assignment created successfully", "data": data})
-    else:
-        return Response({"message": serializer.errors})
+    if not user_id:
+        return Response({"message": "Invalid request"})
 
-
-@api_view(["POST"])
-def assignment_link_view(request):
-    id = request.GET.get("id")
-    if id is None:
-        return Response({"error": "ID parameter is missing"})
-    data = request.data
-    student = data["user"]
-    print(student)
-    print("Assignment id: ", id)
     try:
-        assignment = Assignment.objects.get(id=id)
-        print(assignment.students)
-        assignment.students.add(student)
-        serializer = AssignmentSerializer(assignment)
-        return Response(serializer.data)
+        user = User.objects.get(id=user_id)
+        verification_response = OTP.verify_otp(user, otp_code)
+        if verification_response == Constant.CORRECT_OTP:
+            user.is_active = True
+            user.save()
+            return Response({"message": "User is verified"})
+        elif verification_response == Constant.INCORRECT_OTP:
+            return Response({"message": "OTP does not match"})
+        elif verification_response == Constant.EXPIRED_OTP:
+            otp = OTP.generate_otp(user)
+            email_verification = BaseEmail(
+                subject="OTP for email verification",
+                recepient=user.email,
+                body=generate_mail_template(
+                    mail_type=Constant.IS_STUDENT, otp=otp.otp_code
+                ),
+                mail_type=Constant.IS_STUDENT,
+            )
+            response = email_verification.send_email()
+            if response:
+                return Response(
+                    {"message": "OTP is expired. Please check your mail for new OTP"}
+                )
+
     except Exception as error:
-        print("Error occurred", error)
-        return Response({"error": str(error)})
+        return Response(
+            {"message": f"Error occcurred while verifying the email -> {error}"}
+        )
+
+
+@api_view(["POST"])
+def verify_teacher_email(request):
+    user_id = request.data.get("user_id")
+    otp_code = request.data.get("otp")
+
+    try:
+        user = User.objects.get(id=user_id)
+    except Exception as error:
+        return Response({"message": f"Error occurred {error}"})
+    verification_response = OTP.verify_otp(user, otp_code)
+
+    if verification_response == Constant.CORRECT_OTP:
+        email_verification = BaseEmail(
+            subject="Verify user identity",
+            sender=user.email,
+            recepient=os.environ.get("ADMIN_EMAIL"),
+            body=generate_mail_template(
+                mail_type=Constant.IS_TEACHING_STAFF.value,
+                verify_link=f'{os.environ.get("SERVER_URL")}/api/auth/v1/verify-teacher/{user_id}/',
+                reject_link=f'{os.environ.get("SERVER_URL")}/api/auth/v1/verify-teacher/{user_id}/?status=reject',
+            ),
+        )
+        response = email_verification.send_email()
+        if response:
+            return Response({"message": Constant.WILL_BE_NOTIFIED.value})
+
+    elif verification_response == Constant.INCORRECT_OTP:
+        return Response({"message": Constant.INCORRECT_OTP.value})
+    elif verification_response == Constant.EXPIRED_OTP:
+        otp = OTP.generate_otp(user)
+        email_verification = BaseEmail(
+            subject="OTP for email verification",
+            recepient=user.email,
+            body=generate_mail_template(
+                mail_type=Constant.VERIFY_EMAIL, otp=otp.otp_code
+            ),
+            mail_type=Constant.VERIFY_EMAIL,
+        )
+        response = email_verification.send_email()
+        if response:
+            return Response({"message": Constant.EXPIRED_OTP.value})
+
+    return Response({"message": ""})
 
 
 @api_view(["GET"])
-def get_assignments(request):
-    user_id = request.GET.get("user_id")
-    if user_id is None:
-        return Response({"error": "User_id parameter is missing"})
+def verify_user_as_teacher(request, id):
+    status = request.GET.get("status")
     try:
-        assignments = Assignment.objects.filter(students=user_id)
-        serializer = AssignmentSerializer(assignments, many=True)
-        return Response({"data": serializer.data})
+        user = User.objects.get(id=id)
+
+        if status == "reject":
+            email_response = BaseEmail(
+                subject="Teacher Verification",
+                recepient=user.email,
+                body="You are rejected by the admin for getting the teacher's account access",
+            )
+
+            response = email_response.send_email()
+            user.delete()
+            return Response({"message": "Email sent"})
+        if user:
+            user.is_active = True
+            user.save()
+
+            email_response = BaseEmail(
+                subject="Teacher Verification",
+                recepient=user.email,
+                body="You are now verified as teacher and can login to your account.",
+            )
+
+            response = email_response.send_email()
+            if response:
+                return Response({"message": "Email sent"})
+        else:
+            return Response({"message": "User is not registered"})
     except Exception as error:
-        print("Error occurred while getting the assignments")
-        return Response({"message": str(error)})
+        return Response({"message": f"Error occurred {error}"})
 
 
 @api_view(["POST"])
-def file_upload(request):
-    user_id = request.GET.get("user_id")
-    file = request.data["file"]
-    timestamp = timezone.localtime(timezone.now())
+def verify_login(request):
+    user_id = request.data.get("user_id")
+    otp = request.data.get("otp")
 
-    year = timestamp.strftime("%Y")
-    month = timestamp.strftime("%m")
-    day = timestamp.strftime("%d")
-    hour = str(timestamp.hour)
-    minute = str(timestamp.minute)
-    second = str(timestamp.second)
-    time = year + month + day + hour + minute + second
+    try:
+        user = User.objects.get(id=user_id)
+        verification_response = OTP.verify_otp(user, otp)
 
-    file_name = slugify(file.name)
-    file_path = os.path.join("pdfs", f"{file_name}-student-{user_id}-{time}.pdf")
+        if verification_response == Constant.CORRECT_OTP:
+            response = Response({"message": Constant.CORRECT_OTP.value})
+            tokens = get_tokens_for_user(user, user.role, user.email)
+            set_tokens_in_cookie(response, tokens.get("access"), tokens.get("refresh"))
+            user.refresh_token = tokens.get("refresh")
+            user.save()
+            return Response(
+                {
+                    "message": Constant.USER_LOGGEDIN.value,
+                    "Access_Token": tokens.get("access"),
+                    "Refresh_Token": tokens.get("refresh"),
+                }
+            )
 
-    if default_storage.exists(file_path):
-        return Response({"message": "File already exist"})
+        elif verification_response == Constant.INCORRECT_OTP:
+            return Response({"message": Constant.INCORRECT_OTP.value})
 
-    file_path = default_storage.save(file_path, file)
-    return Response({"status": "File uploaded successfully", "file_path": file_path})
+        elif verification_response == Constant.EXPIRED_OTP:
+            otp = OTP.generate_otp(user)
+            email_verification = BaseEmail(
+                subject="OTP for email verification",
+                recepient=user.email,
+                body=generate_mail_template(
+                    mail_type=Constant.IS_STUDENT, otp=otp.otp_code
+                ),
+                mail_type=Constant.IS_STUDENT,
+            )
+            response = email_verification.send_email()
+            if response:
+                return Response({"message": Constant.EXPIRED_OTP.value})
 
-
-def extract_text_from_pdf(file_path):
-    text = ""
-    with open(file_path, "rb") as file:
-        pdf_reader = PyPDF2.PdfReader(file)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-    return text
-
-
-def compare_documents(documents):
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(documents)
-
-    similarity_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
-
-    return similarity_matrix
-
-
-def detect_plagiarism(similarity_matrix, threshold):
-    num_docs = similarity_matrix.shape[0]
-    plagiarism_cases = []
-
-    for i in range(num_docs):
-        for j in range(i + 1, num_docs):
-            similarity_score = similarity_matrix[i, j]
-            if similarity_score > threshold:
-                plagiarism_cases.append((i, j, similarity_score))
-
-    return plagiarism_cases
+    except Exception as error:
+        return Response({"message": f"Error occurred {error}"})
 
 
-def get_all_paths(directory):
-    file_names = default_storage.listdir(directory)[
-        1
-    ]
-    full_paths = [
-        default_storage.path(directory + file_name) for file_name in file_names
-    ]
-
-    return full_paths
-
-
-@api_view(["POST"])
-def plagiarism(request):
-
-    pdf_files = get_all_paths("pdfs/")
-    documents = [extract_text_from_pdf(pdf_file) for pdf_file in pdf_files]
-
-    similarity_matrix = compare_documents(documents)
-    plagiarism_cases = detect_plagiarism(similarity_matrix, threshold=0.35)
-
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
-
-    for case in plagiarism_cases:
-        doc1_index, doc2_index, similarity_score = case
-        print(
-            f"Documents {BOLD + os.path.basename(pdf_files[doc1_index]).split('.')[0].upper() + RESET} and {BOLD + os.path.basename(pdf_files[doc2_index]).split('.')[0].upper() + RESET} are similar with a similarity score of {similarity_score * 100}"
-        )
-
-    return Response({"message": "Success", "data": pdf_files})
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_user(request):
+    print(request.user)
+    data = request.user
+    return Response({"message": data.email})
