@@ -29,10 +29,12 @@ const AssignmentDetail = () => {
           responseType: "blob",
         }
       );
-      const fileUrl = window.URL.createObjectURL(
-        new Blob([response.data], { type: "application/pdf" })
-      );
-      setFileUrl(fileUrl);
+      if (response.status === 200) {
+        const fileUrl = window.URL.createObjectURL(
+          new Blob([response.data], { type: "application/pdf" })
+        );
+        setFileUrl(fileUrl);
+      }
     } catch (error) {
       console.log(
         "Error occurred while sending pdf path to the server -> ",
@@ -87,7 +89,11 @@ const AssignmentDetail = () => {
       ) : (
         <div className="flex flex-col gap-6 justify-start px-36 pt-12 ">
           {data?.map((submission, index) => (
-            <a key={submission.assignments[0].id} href={submission.document} onClick={serveDocumentHandler}>
+            <a
+              key={submission.assignments[0].id}
+              href={submission.document}
+              onClick={serveDocumentHandler}
+            >
               <div className="flex cursor-pointer gap-6 bg-gray-700/50 border border-gray-600 hover:bg-gray-700/80 px-5 py-4 rounded-md pointer-events-none">
                 <img src={pdfImage} alt="" width={30} />
                 <h3 className="text-lg">{submission.assignments[0].title}</h3>

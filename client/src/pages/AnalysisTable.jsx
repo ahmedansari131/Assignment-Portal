@@ -3,6 +3,7 @@ import { NormalPlagiarisedTable } from "../components";
 
 const AnalysisTable = (props) => {
   const { data, assignmentName } = props;
+  console.log(data)
 
   return (
     <>
@@ -38,12 +39,12 @@ const AnalysisTable = (props) => {
                       >
                         Plagiarism Found (%)
                       </th>
-                      <th
+                      {/* <th
                         scope="col"
                         className="px-4 py-3.5 text-sm font-normal text-left rtl:text-right text-gray-500 dark:text-gray-400"
                       >
                         Document
-                      </th>
+                      </th> */}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-500/20 bg-gray-800/30">
@@ -98,7 +99,7 @@ const AnalysisTable = (props) => {
                             </h2>
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-sm font-medium whitespace-nowrap">
+                        {/* <td className="px-4 py-4 text-sm font-medium whitespace-nowrap">
                           <div>
                             <h2 className="text-gray-800 dark:text-white">
                               <svg
@@ -117,7 +118,7 @@ const AnalysisTable = (props) => {
                               </svg>
                             </h2>
                           </div>
-                        </td>
+                        </td> */}
                       </tr>
                     ))}
                   </tbody>
@@ -128,7 +129,7 @@ const AnalysisTable = (props) => {
         </div>
       </section>
 
-      <NormalPlagiarisedTable data={data[1]} />
+      {data && data[1]?.length != 0 && <NormalPlagiarisedTable data={data[1]} />}
     </>
   );
 };

@@ -5,6 +5,7 @@ import Form from "./Form";
 import { ASSIGNMENT_CREATED } from "../../constants";
 import axios from "axios";
 import useGetAssignments from "../hooks/useGetAssignments";
+import Loader from "./Loader";
 
 const Dialogue = ({ open, setOpen }, ref) => {
   const cancelButtonRef = useRef(null);
@@ -14,18 +15,14 @@ const Dialogue = ({ open, setOpen }, ref) => {
     subject: "",
     createdBy: JSON.parse(localStorage.getItem("user")),
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   const createAssignmentHandler = async () => {
-    if (
-      !inputData.title &&
-      !inputData.subject &&
-      !inputData.createdBy
-    )
-      return;
+    if (!inputData.title && !inputData.subject && !inputData.createdBy) return;
 
     try {
+      setIsLoading(true);
       const url = process.env.PORTAL_SERVER_URL;
-      console.log(url);
       const response = await axios.post(
         `${url}/create-assignment/`,
         inputData,
@@ -45,8 +42,10 @@ const Dialogue = ({ open, setOpen }, ref) => {
         });
         getAssignments();
         setOpen(false);
+        setIsLoading(false);
       }
     } catch (error) {
+      setIsLoading(false);
       console.log("Error occurred while creating assignments -> ", error);
     }
   };
@@ -99,16 +98,19 @@ const Dialogue = ({ open, setOpen }, ref) => {
                   </div>
                 </div>
                 <div className="bg-gray-50 px-4 py-3 flex items-center gap-4 justify-end">
-                  <Button text={"Create"} func={createAssignmentHandler} />
+                  <Button func={createAssignmentHandler}>
+                    {isLoading ? <Loader /> : "Create"}
+                  </Button>
                   <Button
                     className={
                       "bg-transparent border border-gray-300 text-gray-800 hover:bg-gray-200"
                     }
-                    text={"Cancel"}
                     type="button"
                     func={() => setOpen(false)}
                     ref={cancelButtonRef}
-                  />
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </Dialog.Panel>
             </Transition.Child>

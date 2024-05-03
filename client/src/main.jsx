@@ -18,6 +18,7 @@ import {
   AssignmentDetail,
   UploadDocuments,
   AnalysisTable,
+  AssignmentDocument,
 } from "./pages";
 import { Provider } from "react-redux";
 import { store } from "./app/store";
@@ -45,6 +46,10 @@ const router = createBrowserRouter(
       <Route
         path="assignment-analysis/:assignmentId"
         element={<PrivateRoutes Components={AnalysisTable} />}
+      />
+      <Route
+        path="submitted-assignment/:assignmentId"
+        element={<PrivateRoutes Components={AssignmentDocument} />}
       />
     </Route>
   )

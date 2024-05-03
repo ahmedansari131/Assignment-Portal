@@ -4,21 +4,29 @@ import axios from "axios";
 
 const useGetSubmission = () => {
   const [data, setData] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const getSubmissions = async (assignmentId) => {
-    const url = process.env.PORTAL_SERVER_URL;
-    const response = await axios.get(`${url}/submissions/?assignment_id=${assignmentId}`, {
-      headers: {
-        Authorization: "Bearer " + localStorage.getItem("access"),
-      },
-    });
+    setIsLoading(true);
+    try {
+      const url = process.env.PORTAL_SERVER_URL;
+      const response = await axios.get(
+        `${url}/submissions/?assignment_id=${assignmentId}`,
+        {
+          headers: {
+            Authorization: "Bearer " + localStorage.getItem("access"),
+          },
+        }
+      );
 
-    if (response.data.message.toLowerCase() === ALL_SUBMISSIONS.toLowerCase()) {
-      setData(response.data.data);
-    }
+      if (response.status === 200) {
+        setData(response.data.data);
+        setIsLoading(false)
+      }
+    } catch (error) {}
   };
 
-  return { getSubmissions, data };
+  return { getSubmissions, data, isLoading };
 };
 
 export default useGetSubmission;

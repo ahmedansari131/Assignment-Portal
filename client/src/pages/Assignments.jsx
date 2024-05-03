@@ -26,9 +26,9 @@ const Assignments = () => {
 
   return (
     <>
-      <div className="w-full min-h-screen">
+      <div className="w-full min-h-[91.5vh]">
         <SubNav onSelect={(item) => setSelectedItem(item)} selectedItem={selectedItem} />
-        <div className="px-36 py-5">{renderComponent()}</div>t
+        <div className="px-40 py-5">{renderComponent()}</div>
       </div>
     </>
   );

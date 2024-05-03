@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { Button } from "../components";
+import { Button, Loader } from "../components";
 import { useParams } from "react-router-dom";
 import axios from "axios";
+import toast from "react-hot-toast";
 
 const UploadDocuments = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploaded, setIsUploaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { assignmentId } = useParams();
   const userId = localStorage.getItem("user");
 
@@ -23,6 +25,7 @@ const UploadDocuments = () => {
     formData.append("file", selectedFile);
 
     try {
+      setIsLoading(true);
       const url = process.env.PORTAL_SERVER_URL;
       const response = await axios.post(
         `${url}/upload/?user_id=${userId}&assignment_id=${assignmentId}`,
@@ -35,10 +38,14 @@ const UploadDocuments = () => {
         }
       );
       if (response.status === 200) {
+        setIsLoading(false);
         setIsUploaded(true);
       }
     } catch (error) {
+      setIsLoading(false);
+      toast("Error occurred while uploadig documents");
       console.log("Error occurred while uploadig documents -> ", error);
+      return;
     }
   };
 
@@ -85,7 +92,7 @@ const UploadDocuments = () => {
                   </svg>
                 </label>
               </form>
-              <Button text={"Upload"} func={handleUpload} />
+              <Button func={handleUpload}>{isLoading ? <Loader />  : "Upload"}</Button>
             </div>
           </div>
         </div>

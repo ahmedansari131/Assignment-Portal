@@ -1,11 +1,15 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import AssignmentCards from "./AssignmentCards";
+import toast from "react-hot-toast";
+import { Loader } from "../components";
 
 const SubmittedSection = () => {
   const [assignments, setAssignments] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const getSubmittedAssignments = async () => {
+    setIsLoading(true);
     try {
       const user_id = localStorage.getItem("user");
       const url = process.env.PORTAL_SERVER_URL;
@@ -19,10 +23,14 @@ const SubmittedSection = () => {
       );
 
       if (response.status === 200) {
+        setIsLoading(false)
         setAssignments(response.data.data);
       }
     } catch (error) {
+      setIsLoading(false);
+      toast("Error occurred while getting the submissions");
       console.log("Error occurred while getting the submissions -> ", error);
+      return;
     }
   };
   useEffect(() => {
@@ -31,7 +39,9 @@ const SubmittedSection = () => {
 
   return (
     <div className="flex flex-col gap-5 justify-center items-center">
-      {!assignments?.length ? (
+      {isLoading ? (
+        <Loader />
+      ) : !assignments?.length ? (
         <p>No submissions founds</p>
       ) : (
         assignments?.map((assignment, index) => (
@@ -43,6 +53,7 @@ const SubmittedSection = () => {
             createdBy={assignment.created_by_email}
             points={assignment.points}
             link={assignment.link}
+            submittedLink={assignment.submitted_link || null}
           />
         ))
       )}

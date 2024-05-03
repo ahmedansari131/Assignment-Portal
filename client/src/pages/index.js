@@ -8,6 +8,7 @@ import TeacherVerification from "./TeacherVerification";
 import AssignmentDetail from "./AssignmentDetail";
 import UploadDocuments from "./UploadDocuments";
 import AnalysisTable from "./AnalysisTable";
+import AssignmentDocument from "./AssignmentDocument";
 
 export {
     Landing,
@@ -20,4 +21,5 @@ export {
     AssignmentDetail,
     UploadDocuments,
     AnalysisTable,
+    AssignmentDocument
 }

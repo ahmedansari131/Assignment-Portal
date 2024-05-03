@@ -5,10 +5,11 @@ import axios from "axios";
 import { useDispatch, useSelector } from "react-redux";
 import { setLoggedIn, setRole } from "../app/slice/login.slice";
 import LoaderPage from "./LoaderPage";
+import { Toaster } from "react-hot-toast";
 
 const Layout = () => {
   const dispatch = useDispatch();
-  const isLoggedIn = useSelector((state) => state.isLoggedIn.status);
+const isLoggedIn = useSelector((state) => state.isLoggedIn.status);
   const [isLoading, setIsLoading] = useState(true);
 
   const updateToken = async () => {
@@ -31,12 +32,6 @@ const Layout = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const loaderHandler = () => {
-    if (!isLoggedIn) {
-      return <LoaderPage />;
-    }
-  };
-
   useEffect(() => {
     const fetchLoginStatus = () => {
       const isLoggedIn = localStorage.getItem("access") ? true : false;
@@ -55,6 +50,7 @@ const Layout = () => {
         <LoaderPage />
       ) : (
         <Container>
+          <Toaster />
           <Header />
           <Outlet />
         </Container>

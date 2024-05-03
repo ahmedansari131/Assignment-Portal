@@ -92,7 +92,7 @@ const Header = (props) => {
                 <div className="flex items-center gap-3">
                   {!isLoggedIn && (
                     <Link to={"login/"}>
-                      <Button text={"Login"} />
+                      <Button>Login</Button>
                     </Link>
                   )}
                 </div>
@@ -127,8 +127,13 @@ const Header = (props) => {
                                   "block px-4 py-2 text-sm text-gray-200 bg-indigo-600 pointer-events-none font-medium"
                                 }
                               >
-                                {localStorage.getItem("email").slice(0, 18) +
-                                  "..."}
+                                {`${
+                                  localStorage.getItem("email").slice(0, 18) +
+                                  (localStorage.getItem("email").slice(0, 18)
+                                    .length ===
+                                    localStorage.getItem("email").length ? "" : "...")
+                                }
+                                  `}
                               </p>
                             )}
                           </Menu.Item>

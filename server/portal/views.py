@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.http import FileResponse
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
@@ -17,6 +16,9 @@ import datetime
 import PyPDF2
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import boto3
+from utils import s3_config
+import difflib
 
 
 @api_view(["POST"])
@@ -81,7 +83,6 @@ def get_assignments(request):
 def file_upload(request):
     user_id = request.GET.get("user_id")
     assignment_id = request.GET.get("assignment_id")
-    print(assignment_id)
     file = request.data["file"]
     timestamp = timezone.localtime(timezone.now())
 
@@ -95,27 +96,68 @@ def file_upload(request):
 
     file_name = slugify(file.name)
     file_name = file_name[:-3]
-    print("File name ->", file_name)
     file_path = os.path.join(
-        "pdfs", f"{file_name}_student_{user_id}_{assignment_id}_{time}.pdf"
+        f"{file_name}_student_{user_id}_{assignment_id}_{time}.pdf"
     )
 
-    if default_storage.exists(file_path):
-        return Response({"message": "File already exist"})
-
-    file_path = default_storage.save(file_path, file)
+    s3_client = s3_config()
     try:
-        if file_path:
-            assignment = Assignment.objects.get(id=assignment_id)
-            assignment.students.add(user_id)
-            return Response(
-                {"status": "File uploaded successfully", "file_path": file_path}
-            )
-        else:
-            return Response({"message": "Error occurred"})
+        s3_objects = get_s3_object()
+        if s3_objects:
+            for obj in s3_objects:
+                if user_id == obj.split("_")[2] and assignment_id == obj.split("_")[3]:
+                    return Response({"message": "Assignment already uploaded"})
+
+        s3_client.upload_fileobj(file, os.environ.get("S3_BUCKET_NAME"), file_path)
+        response_url = create_presigned_url(os.environ.get("S3_BUCKET_NAME"), file_path)
+
+        assignment = Assignment.objects.get(id=assignment_id)
+        assignment.students.add(user_id)
+        assignment.save()
+
+        return Response(
+            {"message": "File uploaded successfully", "file_url": response_url}
+        )
     except Exception as error:
         return Response(
             {"message": f"Error occurred while uploading the document -> {error}"}
+        )
+
+
+def create_presigned_url(
+    object_name, expiration=3600, bucket_name=os.environ.get("S3_BUCKET_NAME")
+):
+    s3_client = s3_config()
+    print(object_name)
+    try:
+        response = s3_client.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": bucket_name,
+                "Key": object_name,
+                "ResponseContentType": "application/pdf",
+            },
+            ExpiresIn=expiration,
+        )
+    except Exception as error:
+        return f"Error occurred while preparing url -> {error}"
+
+    return response
+
+
+def get_s3_object():
+    s3_objects = []
+    s3_client = s3_config()
+    try:
+        buckets_obj = s3_client.list_objects_v2(Bucket=os.environ.get("S3_BUCKET_NAME"))
+        if "Contents" in buckets_obj:
+            objects = buckets_obj["Contents"]
+            for obj in objects:
+                s3_objects.append(obj["Key"])
+            return s3_objects
+    except Exception as error:
+        return Response(
+            {"message": f"Error occurred while getting the objects -> {error}"}
         )
 
 
@@ -131,7 +173,6 @@ def get_student_submissions(request):
         serialized_assignments = AssignmentSerializer(assignment, many=True)
 
         serialized_users.data[0]["assignments"] = serialized_assignments.data
-        data = serialized_users.data
 
         root_directory = default_storage.location
         directory = "pdfs"
@@ -154,25 +195,61 @@ def get_student_submissions(request):
         )
 
 
-@api_view(["POST"])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def serve_document(request):
-    file_path = request.data
-    print(file_path)
-    decoded_file_path = unquote(file_path["file_path"]).replace("file:///", "")
-    print(decoded_file_path)
-    if os.path.exists(decoded_file_path):
-        return FileResponse(
-            open(decoded_file_path, "rb"), content_type="application/pdf"
+    user_id = request.GET.get("user_id")
+    assignment_id = request.GET.get("assignment_id")
+    print(assignment_id, user_id)
+    s3_objects = get_s3_object()
+    for obj in s3_objects:
+        if user_id == str(obj.split("_")[2]) and assignment_id == str(
+            obj.split("_")[3]
+        ):
+            response_url = create_presigned_url(obj)
+            return Response({"message": "Assignment found", "data": response_url})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_total_submissions(request):
+    assignment_id = request.GET.get("assignment_id")
+    data = []
+    try:
+        s3_objects = get_s3_object()
+        for obj in s3_objects:
+            if assignment_id == obj.split("_")[3]:
+                try:
+                    user = User.objects.get(id=obj.split("_")[2])
+                    assignment = Assignment.objects.get(id=assignment_id)
+                    assginment_serializer = AssignmentSerializer(assignment)
+                    serializer = UserLoginSerializer(user)
+                    response_url = create_presigned_url(obj)
+                    data.append(
+                        {
+                            "student": serializer.data["email"],
+                            "doc": response_url,
+                            "assignment_title": assginment_serializer.data["title"],
+                        }
+                    )
+                except Exception as error:
+                    return Response(
+                        {
+                            "message": f"Error occurred while getting the users -> {error}"
+                        }
+                    )
+        return Response({"message": "Got Assignments", "data": data})
+    except Exception as error:
+        return Response(
+            {"message": f"Error occurred while getting all the assignments -> {error}"}
         )
-    else:
-        return Response({"message": "File not found"})
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_individual_submissions(request):
     user_id = request.GET.get("user_id")
+    data = []
 
     try:
         submissions = Assignment.objects.filter(students=user_id)
@@ -180,6 +257,13 @@ def get_individual_submissions(request):
             return Response({"message": "No submissions found"})
 
         serialzer = AssignmentSerializer(submissions, many=True)
+        s3_objects = get_s3_object()
+
+        for data in serialzer.data:
+            for obj in s3_objects:
+                if str(data["id"]) == obj.split("_")[3]:
+                    data["submitted_link"] = create_presigned_url(obj)
+
         return Response({"message": "Submission found", "data": serialzer.data})
 
     except Exception as error:
@@ -217,20 +301,59 @@ def detect_plagiarism(similarity_matrix, threshold, filenames):  # Added filenam
     return plagiarism_cases, analyzed_documents
 
 
-def get_all_paths(directory):
-    file_names = default_storage.listdir(directory)[1]
-    full_paths = [
-        default_storage.path(directory + file_name) for file_name in file_names
-    ]
+def highlight_plagiarism(document_texts, similarity_matrix, threshold):
+    num_docs = len(document_texts)
+    highlighted_plagiarism = []
 
-    return full_paths
+    for i in range(num_docs):
+        for j in range(i + 1, num_docs):
+            similarity_score = similarity_matrix[i, j]
+            if similarity_score > threshold:
+                # Use difflib to find the differences between the texts
+                differ = difflib.SequenceMatcher(
+                    None, document_texts[i], document_texts[j]
+                )
+                for tag, i1, i2, j1, j2 in differ.get_opcodes():
+                    if tag == "equal":
+                        highlighted_plagiarism.append(
+                            (
+                                i,
+                                j,
+                                similarity_score,
+                                document_texts[i][i1:i2],
+                                document_texts[j][j1:j2],
+                            )
+                        )
+    return highlighted_plagiarism
+
+
+def download_pdf_from_s3(bucket_name, key, destination):
+    s3_client = s3_config()
+    s3_client.download_file(bucket_name, key, destination)
+
+
+def get_all_paths(assignment_id):
+    objects = get_s3_object()
+    for obj in objects:
+        if assignment_id == obj.split("_")[3]:
+            download_pdf_from_s3(
+                os.environ.get("S3_BUCKET_NAME"),
+                obj,
+                os.path.join(settings.MEDIA_ROOT, "pdfs", obj),
+            )
+    full_path = [
+        os.path.join(settings.MEDIA_ROOT, "pdfs", file_name)
+        for file_name in objects
+        if assignment_id == file_name.split("_")[3]
+    ]
+    return full_path
 
 
 @api_view(["POST"])
 def plagiarism(request):
-    pdf_files = get_all_paths("pdfs/")
-    assignments = []
     assignment_id = request.data["assignment_id"]
+    pdf_files = get_all_paths(assignment_id)
+    assignments = []
     analyzed_documents_response = []
     plagiarized_documents_response = []
 
@@ -243,6 +366,11 @@ def plagiarism(request):
     plagiarism_cases, analyzed_documents = detect_plagiarism(
         similarity_matrix, threshold=0.4, filenames=assignments
     )
+
+    highlighted_plagiarism = highlight_plagiarism(
+        documents, similarity_matrix, threshold=0.4
+    )
+    print(highlighted_plagiarism)
 
     for i in range(len(analyzed_documents)):
         for j in range(len(analyzed_documents[i])):
@@ -311,7 +439,7 @@ def plagiarism(request):
                     {
                         "authentic": [authentic_student.email],
                         "plagiarized": [plagiarized_student.email],
-                        "plagiarism": plagiarism_groups[i][2]
+                        "plagiarism": plagiarism_groups[i][2],
                     }
                 )
 
