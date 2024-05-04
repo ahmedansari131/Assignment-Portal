@@ -1,7 +1,6 @@
-import React, { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { Navigate, Outlet } from "react-router-dom";
-import { Assignments } from "../pages";
+import React from "react";
+import { useSelector } from "react-redux";
+import { Navigate } from "react-router-dom";
 
 const PrivateRoutes = ({ Components }) => {
   const isLoggedIn = useSelector((state) => state.isLoggedIn.status);

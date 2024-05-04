@@ -61,7 +61,10 @@ const Login = () => {
       if (response.data.message.toLowerCase() === VERIFY_EMAIL.toLowerCase()) {
         localStorage.setItem("user", response.data.user_id);
         localStorage.setItem("role", response.data.role);
-        localStorage.setItem("isRegistering", response.data.is_registering || null)
+        localStorage.setItem(
+          "isRegistering",
+          response.data.is_registering || null
+        );
         navigate("/login-verification");
       }
     }
@@ -97,11 +100,10 @@ const Login = () => {
                 )}
               </div>
               <SelectMenu setRole={setInputData} />
-              <Button
-                text={"Login"}
-                func={userLoginHandler}
-                isLoading={isLoading}
-              />
+              <Button func={userLoginHandler} isLoading={isLoading}>
+                {" "}
+                Login
+              </Button>
             </div>
           </div>
         </div>

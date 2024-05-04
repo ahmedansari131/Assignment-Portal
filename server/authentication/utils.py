@@ -16,7 +16,7 @@ class BaseEmail:
         recepient,
         subject,
         body,
-        sender=os.environ.get("ADMIN_EMAIL"),
+        sender,
         mail_type=None,
     ):
         self.type = mail_type
@@ -38,7 +38,6 @@ class BaseEmail:
             email.send()
             return True
         except Exception as error:
-            print("Error occurred while sending email", error)
             return Response({"Error occurred while sending email -> ": error})
 
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Input, Error } from "../components";
+import { Button, Input, Error, Loader } from "../components";
 import axios from "axios";
 import {
   EXPIRED_OTP,
@@ -11,6 +11,7 @@ import {
 } from "../../constants";
 import { useDispatch } from "react-redux";
 import { setLoggedIn } from "../app/slice/login.slice";
+import toast from "react-hot-toast";
 
 const OTP = () => {
   const [inputError, setInputError] = useState("");
@@ -89,8 +90,11 @@ const OTP = () => {
     const role = localStorage.getItem("role");
     const isRegistering = JSON.parse(localStorage.getItem("isRegistering"));
     try {
+      setIsLoading(true);
       const response = await axios.post(
-        role.toLowerCase() === "teacher" && isRegistering ? teacher_url : `${url}/verify-login/`,
+        role.toLowerCase() === "teacher" && isRegistering
+          ? teacher_url
+          : `${url}/verify-login/`,
         postData
       );
 
@@ -112,6 +116,7 @@ const OTP = () => {
         localStorage.removeItem("user");
         localStorage.removeItem("role");
         localStorage.removeItem("isRegistering");
+        setIsLoading(false);
         navigate("/teacher-verification");
         return;
       }
@@ -122,11 +127,15 @@ const OTP = () => {
         localStorage.setItem("refresh", response.data.Refresh_Token);
         localStorage.removeItem("user");
         localStorage.removeItem("isRegistering");
-        navigate("/");
         setIsLoading(false);
+        navigate("/");
       }
+
     } catch (error) {
+      setIsLoading(false);
+      toast("Error occurred while verifying the email");
       console.log("Error occurred while verifying the email -> ", error);
+      return;
     }
   };
 
@@ -135,7 +144,7 @@ const OTP = () => {
       <div className="w-full flex justify-center items-center min-h-[91.5vh]">
         <div className="backdrop-blur-lg p-10 w-1/3 text-white ring-1 ring-inset ring-white/10 rounded-md flex flex-col h-70 justify-center">
           <div className="text-white mb-5">
-            <h2 className="text-3xl font-semibold">Login Verification</h2>
+            <h2 className="text-3xl font-semibold">{JSON.parse(localStorage.getItem("isRegistering")) ? "Email Verification" : "Login Verification"}</h2>
             <p className="text-gray-400 text-sm mt-2">
               Check your email for the otp
             </p>
@@ -193,10 +202,12 @@ const OTP = () => {
           </div>
           <div className="mt-2">
             <Button
-              text={"Verify"}
               className="transition duration-300"
               func={handleEmailVerification}
-            />
+            >
+              
+              {isLoading ? <Loader /> : "Verify"}
+            </Button>
           </div>
         </div>
       </div>

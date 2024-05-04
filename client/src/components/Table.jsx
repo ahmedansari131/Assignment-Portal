@@ -5,42 +5,18 @@ import { useParams } from "react-router-dom";
 import pdfIcon from "../assests/pdf.png";
 import axios from "axios";
 import AnalysisTable from "../pages/AnalysisTable";
+import toast from "react-hot-toast";
 
 const Table = () => {
-  const { getSubmissions, data } = useGetSubmission();
+  const {
+    getSubmissions,
+    data,
+    isLoading: submissionLoader,
+  } = useGetSubmission();
   const { assignmentId } = useParams();
   const [fileUrl, setFileUrl] = useState("");
   const [analysisData, setAnalysisData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const serveDocumentHandler = async (e) => {
-    e.preventDefault();
-    try {
-      const data = { file_path: e.target.href };
-      const url = process.env.PORTAL_SERVER_URL;
-      const response = await axios.post(
-        `${url}/serve-documents/`,
-        data,
-        {
-          headers: {
-            Authorization: "Bearer " + localStorage.getItem("access"),
-          },
-        },
-        {
-          responseType: "blob", // Set the response type to 'blob'
-        }
-      );
-      const fileUrl = window.URL.createObjectURL(
-        new Blob([response.data], { type: "application/pdf" })
-      );
-      setFileUrl(fileUrl);
-    } catch (error) {
-      console.log(
-        "Error occurred while sending pdf path to the server -> ",
-        error
-      );
-    }
-  };
 
   const backHandler = () => {
     if (fileUrl) setFileUrl("");
@@ -54,7 +30,48 @@ const Table = () => {
     getSubmissions(assignmentId);
   }, []);
 
+  const openPdfInIframe = (e) => {
+    e.preventDefault();
+
+    setIsLoading(true);
+
+    const url = e.target.href;
+
+    setFileUrl(url);
+
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+  };
+
   const plagiarismHandler = async () => {
+    if (data?.length <= 1) {
+      toast("No plagiarism detection for one assignment", {
+        icon: (
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 15 15"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z"
+              fill="currentColor"
+              fill-rule="evenodd"
+              clip-rule="evenodd"
+            ></path>
+          </svg>
+        ),
+        style: {
+          borderRadius: "10px",
+          background: "#2d2d2d",
+          color: "#fff",
+          fontSize: ".9rem",
+        },
+      });
+      return;
+    }
     setIsLoading(true);
     try {
       const url = process.env.PORTAL_SERVER_URL;
@@ -62,16 +79,46 @@ const Table = () => {
       const response = await axios.post(`${url}/plagiarism/`, data);
 
       if (response.status === 200) {
+        setIsLoading(false)
         setAnalysisData(response.data.data);
       }
     } catch (error) {
+      setIsLoading(false);
+      toast("Error occurred while detecting the plagiarism", {
+        icon: (
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 15 15"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z"
+              fill="currentColor"
+              fill-rule="evenodd"
+              clip-rule="evenodd"
+            ></path>
+          </svg>
+        ),
+        style: {
+          borderRadius: "10px",
+          background: "#2d2d2d",
+          color: "#fff",
+          fontSize: ".9rem",
+        },
+      });
       console.log("Error occurred while detecting the plagiarism -> ", error);
     }
   };
 
   return (
     <div className="px-36">
-      {fileUrl ? (
+      {isLoading ? (
+        <div className="min-h-[91.5vh] flex justify-center items-center font-medium text-xl gap-5">
+          <Loader /> Loading
+        </div>
+      ) : fileUrl ? (
         <>
           <div className="w-full py-3 flex justify-start items-center select-none">
             <div
@@ -100,7 +147,7 @@ const Table = () => {
             style={{ width: "100%", height: "700px", border: "none" }}
           />
         </>
-      ) : analysisData ? (
+      ) : analysisData && analysisData[0].length != 0 ? (
         <div className="flex justify-start mt-5 flex-col">
           <div className="flex items-center gap-5">
             <div
@@ -124,27 +171,27 @@ const Table = () => {
             </div>
             <div className="flex items-center gap-x-3">
               <h2 className="text-lg font-medium text-gray-800 dark:text-white">
-                {data[0]?.assignments[0].title}
+                {/* {data[0]?.assignments[0].title} */}
               </h2>
             </div>
           </div>
           <AnalysisTable data={analysisData} />
         </div>
-      ) : isLoading ? (
+      ) : isLoading || submissionLoader ? (
         <div className="min-h-[91.5vh] flex justify-center items-center font-medium text-xl gap-5">
           <Loader /> Loading
         </div>
-      ) : (
+      ) : data?.length > 0 ? (
         <section className="container px-4 mx-auto">
           <div className="sm:flex sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-x-3 mt-6">
                 <h2 className="text-lg font-medium text-gray-800 dark:text-white">
-                  {data[0]?.assignments[0].title}
+                  {data[0].assignment_title}
                 </h2>
 
                 <span className="px-3 py-1 text-xs text-blue-600 bg-blue-100 rounded-full dark:bg-gray-800 dark:text-blue-400">
-                  {data.length >= 1
+                  {data.length == 1
                     ? data.length + " Submission"
                     : data.length + " Submissions"}
                 </span>
@@ -152,7 +199,7 @@ const Table = () => {
             </div>
 
             <div className="flex items-center mt-4 gap-x-3">
-              <Button text={"Check Plagiarism"} func={plagiarismHandler} />
+              <Button func={plagiarismHandler}>Check Plagiarism</Button>
             </div>
           </div>
 
@@ -186,15 +233,17 @@ const Table = () => {
                           <td className="px-4 py-4 text-sm font-medium whitespace-nowrap">
                             <div>
                               <h2 className="text-gray-800 dark:text-white ">
-                                {submission.email
+                                {submission.student
                                   .split(".")[0][0]
                                   .toUpperCase() +
-                                  submission.email.split(".")[0].substring(1) +
+                                  submission.student
+                                    .split(".")[0]
+                                    .substring(1) +
                                   " " +
-                                  submission.email
+                                  submission.student
                                     .split(".")[1][0]
                                     .toUpperCase() +
-                                  submission.email
+                                  submission.student
                                     .split(".")[1]
                                     .substring(1)
                                     .replace("@vit", "")}
@@ -203,10 +252,9 @@ const Table = () => {
                           </td>
                           <td className="px-12 py-4 text-sm font-medium whitespace-nowrap">
                             <a
-                              className="cursor-pointer "
-                              href={submission.document}
-                              target="_blank"
-                              onClick={serveDocumentHandler}
+                              className="cursor-pointer"
+                              href={submission.doc}
+                              onClick={openPdfInIframe}
                             >
                               <img
                                 className="pointer-events-none"
@@ -224,6 +272,10 @@ const Table = () => {
             </div>
           </div>
         </section>
+      ) : (
+        <div className="h-full w-full flex justify-center pt-8 text-[1rem">
+          No submissions found
+        </div>
       )}
     </div>
   );

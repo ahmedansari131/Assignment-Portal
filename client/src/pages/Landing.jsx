@@ -6,13 +6,13 @@ const Landing = (props) => {
   return (
     <div className="text-inherit min-h-[91.5vh] flex justify-center items-center">
       <div className="flex justify-center items-center flex-col gap-4 py-5 h-full">
-        <h2 className="text-center text-3xl font-[Roboto] font-medium">
-          Seamless Submission, Confident Verification: Your Assignment Portal
+        <h2 className="text-center text-3xl font-[Roboto] font-medium flex items-center flex-col gap-2">
+          Seamless Submission, Confident Verification <span>Your Assignment Portal</span> 
         </h2>
         <Link
           to={"/assignments"}
         >
-          <Button text={"Get Started"} className={"text-lg"} />
+          <Button className={"text-lg mt-2"}>Getting Started</Button>
         </Link>
       </div>
       <div

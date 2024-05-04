@@ -16,6 +16,7 @@ from authentication.utils import (
 from django.contrib.auth.backends import BaseBackend
 from rest_framework_simplejwt.views import TokenViewBase
 from constants import Constant
+from django.http import HttpResponse
 
 
 class TokenObtainPairWithoutPasswordView(TokenViewBase):
@@ -39,7 +40,8 @@ class AuthenticationWithoutPassword(BaseBackend):
 def get_tokens_for_user(user, role, email):
     refresh = RefreshToken.for_user(user)
     refresh["role"] = role
-
+    refresh["email"] = email
+    print("Refresh token")
     access_token = refresh.access_token
     access_token.payload["role"] = role
     access_token.payload["email"] = email
@@ -50,42 +52,42 @@ def get_tokens_for_user(user, role, email):
     }
 
 
-@api_view(["POST"])
-def register(request):
-    serializer = UserLoginSerializer(data=request.data)
-    if serializer.is_valid(raise_exception=True):
-        email = serializer.validated_data.get("email")
-        role = serializer.validated_data.get("role")
+# @api_view(["POST"])
+# def register(request):
+#     serializer = UserLoginSerializer(data=request.data)
+#     if serializer.is_valid(raise_exception=True):
+#         email = serializer.validated_data.get("email")
+#         role = serializer.validated_data.get("role")
 
-        if check_email_domain(email):
-            try:
-                user_query = User.objects.filter(email=email)
+#         if check_email_domain(email):
+#             try:
+#                 user_query = User.objects.filter(email=email)
 
-                if user_query.exists():
-                    return Response({"message": Constant.USER_EXIST.value})
+#                 if user_query.exists():
+#                     return Response({"message": Constant.USER_EXIST.value})
 
-                user_save_response = serializer.save()
+#                 user_save_response = serializer.save()
 
-                if user_save_response:
-                    user_id = str(user_save_response.id)
-                    otp = OTP.generate_otp(user=user_save_response)
-                    verification_email = BaseEmail(
-                        recepient=email,
-                        subject="Email Verification | Assignment Portal",
-                        body=generate_mail_template(
-                            mail_type=Constant.VERIFY_EMAIL, otp=otp.otp_code
-                        ),
-                    )
-                    email_response = verification_email.send_email()
-                    if email_response and serializer.is_valid(raise_exception=True):
-                        return Response(
-                            {"message": Constant.OTP_SENT.value, "user_id": user_id}
-                        )
+#                 if user_save_response:
+#                     user_id = str(user_save_response.id)
+#                     otp = OTP.generate_otp(user=user_save_response)
+#                     verification_email = BaseEmail(
+#                         recepient=email,
+#                         subject="Email Verification | Assignment Portal",
+#                         body=generate_mail_template(
+#                             mail_type=Constant.VERIFY_EMAIL, otp=otp.otp_code
+#                         ),
+#                     )
+#                     email_response = verification_email.send_email()
+#                     if email_response and serializer.is_valid(raise_exception=True):
+#                         return Response(
+#                             {"message": Constant.OTP_SENT.value, "user_id": user_id}
+#                         )
 
-            except Exception as error:
-                return Response({"message": f"Error occurred {error}"})
-        else:
-            return Response({"message": "Enter the Vidyalankar's Email Id"})
+#             except Exception as error:
+#                 return Response({"message": f"Error occurred {error}"})
+#         else:
+#             return Response({"message": "Enter the Vidyalankar's Email Id"})
 
 
 @api_view(["POST"])
@@ -137,6 +139,7 @@ def send_login_email(user):
     otp = OTP.generate_otp(user)
     user_verification = BaseEmail(
         subject="OTP for Login to Assignment Portal",
+        sender=os.environ.get("ADMIN_EMAIL"),
         recepient=user.email,
         body=generate_mail_template(mail_type=Constant.IS_STUDENT, otp=otp.otp_code),
         mail_type=Constant.IS_STUDENT,
@@ -148,43 +151,43 @@ def send_login_email(user):
         return False
 
 
-@api_view(["POST"])
-def verify_email(request):
-    user_id = request.data.get("user_id")
-    otp_code = request.data.get("otp")
+# @api_view(["POST"])
+# def verify_email(request):
+#     user_id = request.data.get("user_id")
+#     otp_code = request.data.get("otp")
 
-    if not user_id:
-        return Response({"message": "Invalid request"})
+#     if not user_id:
+#         return Response({"message": "Invalid request"})
 
-    try:
-        user = User.objects.get(id=user_id)
-        verification_response = OTP.verify_otp(user, otp_code)
-        if verification_response == Constant.CORRECT_OTP:
-            user.is_active = True
-            user.save()
-            return Response({"message": "User is verified"})
-        elif verification_response == Constant.INCORRECT_OTP:
-            return Response({"message": "OTP does not match"})
-        elif verification_response == Constant.EXPIRED_OTP:
-            otp = OTP.generate_otp(user)
-            email_verification = BaseEmail(
-                subject="OTP for email verification",
-                recepient=user.email,
-                body=generate_mail_template(
-                    mail_type=Constant.IS_STUDENT, otp=otp.otp_code
-                ),
-                mail_type=Constant.IS_STUDENT,
-            )
-            response = email_verification.send_email()
-            if response:
-                return Response(
-                    {"message": "OTP is expired. Please check your mail for new OTP"}
-                )
+#     try:
+#         user = User.objects.get(id=user_id)
+#         verification_response = OTP.verify_otp(user, otp_code)
+#         if verification_response == Constant.CORRECT_OTP:
+#             user.is_active = True
+#             user.save()
+#             return Response({"message": "User is verified"})
+#         elif verification_response == Constant.INCORRECT_OTP:
+#             return Response({"message": "OTP does not match"})
+#         elif verification_response == Constant.EXPIRED_OTP:
+#             otp = OTP.generate_otp(user)
+#             email_verification = BaseEmail(
+#                 subject="OTP for email verification",
+#                 recepient=user.email,
+#                 body=generate_mail_template(
+#                     mail_type=Constant.IS_STUDENT, otp=otp.otp_code
+#                 ),
+#                 mail_type=Constant.IS_STUDENT,
+#             )
+#             response = email_verification.send_email()
+#             if response:
+#                 return Response(
+#                     {"message": "OTP is expired. Please check your mail for new OTP"}
+#                 )
 
-    except Exception as error:
-        return Response(
-            {"message": f"Error occcurred while verifying the email -> {error}"}
-        )
+#     except Exception as error:
+#         return Response(
+#             {"message": f"Error occcurred while verifying the email -> {error}"}
+#         )
 
 
 @api_view(["POST"])
@@ -197,6 +200,7 @@ def verify_teacher_email(request):
     except Exception as error:
         return Response({"message": f"Error occurred {error}"})
     verification_response = OTP.verify_otp(user, otp_code)
+    print("User Email -> ", user)
 
     if verification_response == Constant.CORRECT_OTP:
         email_verification = BaseEmail(
@@ -254,15 +258,16 @@ def verify_user_as_teacher(request, id):
 
             email_response = BaseEmail(
                 subject="Teacher Verification",
+                sender=os.environ.get("ADMIN_EMAIL"),
                 recepient=user.email,
                 body="You are now verified as teacher and can login to your account.",
             )
 
             response = email_response.send_email()
             if response:
-                return Response({"message": "Email sent"})
+                return HttpResponse("User is verified as teaching staff")
         else:
-            return Response({"message": "User is not registered"})
+            return HttpResponse("User is request is rejected for verification regarding teaching staff")
     except Exception as error:
         return Response({"message": f"Error occurred {error}"})
 
@@ -277,6 +282,7 @@ def verify_login(request):
         verification_response = OTP.verify_otp(user, otp)
 
         if verification_response == Constant.CORRECT_OTP:
+            user.is_active = True
             response = Response({"message": Constant.CORRECT_OTP.value})
             tokens = get_tokens_for_user(user, user.role, user.email)
             set_tokens_in_cookie(response, tokens.get("access"), tokens.get("refresh"))

@@ -3,7 +3,7 @@ import { cn } from "../utils";
 import { Loader } from "../components";
 
 const Button = (props) => {
-  const { text, className, func, isLoading = false } = props;
+  const { text, className, func, isLoading = false, children } = props;
   return (
     <button
       onClick={func}
@@ -13,7 +13,7 @@ const Button = (props) => {
       )}
     >
       {isLoading && <Loader />}
-      {text}
+      {children}
     </button>
   );
 };

@@ -4,7 +4,7 @@ const NormalPlagiarisedTable = (props) => {
   const { data } = props;
 
   return (
-    <section className="container mx-auto mb-5">
+  <section className="container mx-auto mb-5">
       <div className="sm:flex sm:items-center sm:justify-between">
         <div className="mt-7 text-lg">
           <h2>Low Plagiarism Detected</h2>
@@ -36,12 +36,12 @@ const NormalPlagiarisedTable = (props) => {
                     >
                       Plagiarism Found (%)
                     </th>
-                    <th
+                    {/* <th
                       scope="col"
                       className="px-4 py-3.5 text-sm font-normal text-left rtl:text-right text-gray-500 dark:text-gray-400"
                     >
                       Document
-                    </th>
+                    </th> */}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-500/20 bg-gray-800/30">
@@ -88,7 +88,7 @@ const NormalPlagiarisedTable = (props) => {
                           </h2>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm font-medium whitespace-nowrap">
+                      {/* <td className="px-4 py-4 text-sm font-medium whitespace-nowrap">
                         <div>
                           <h2 className="text-gray-800 dark:text-white">
                             <svg
@@ -107,7 +107,7 @@ const NormalPlagiarisedTable = (props) => {
                             </svg>
                           </h2>
                         </div>
-                      </td>
+                      </td> */}
                     </tr>
                   ))}
                 </tbody>

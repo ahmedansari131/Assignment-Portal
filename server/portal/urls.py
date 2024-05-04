@@ -8,7 +8,7 @@ urlpatterns = [
     path("assignment/link/", views.assignment_link_view, name="assignment_link"),
     path("assignments/", views.get_assignments, name="get_assignment"),
     path("upload/", views.file_upload, name="file_upload"),
-    path("submissions/", views.get_student_submissions, name="student_submissions"),
+    path("submissions/", views.get_total_submissions, name="total_submissions"),
     path("serve-documents/", views.serve_document, name="serve_documents"),
     path("individual-submissions/", views.get_individual_submissions, name="individual_submissions"),
 
